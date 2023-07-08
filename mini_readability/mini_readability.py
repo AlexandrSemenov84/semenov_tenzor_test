@@ -5,10 +5,8 @@ from bs4 import BeautifulSoup as Soup
 import requests
 from pathlib import Path
 from urllib.parse import urlparse
-
 from requests.exceptions import InvalidURL, MissingSchema
-
-from extractor import extract
+from extractors import extract
 
 
 def print_to_file(url_str: str, text: str) -> str:
