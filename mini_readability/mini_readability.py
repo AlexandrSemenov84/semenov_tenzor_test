@@ -30,24 +30,18 @@ def print_to_file(url_str: str, text: str) -> str:
     Path(dir_name).mkdir(parents=True, exist_ok=True)
 
     file_path = dir_name + file_name + file_extension
-    with open(file_path, 'w') as f:
+    with open(file_path, 'w', encoding='utf-8') as f:
         f.write(text)
-    f.close()
+
     return file_path
 
 
 def main():
-    # url_str = 'https://lenta.ru/news/2023/07/05/akkurat_akkurat/'
-    # url_str = 'https://lenta.ru/news/2023/06/05/vvozdukh.html'
-    # urlStr = 'https://lenta.ru'
-    # url_str = 'https://www.google.com/search?q=python'
-    url_str = 'https://ru.wikipedia.org/wiki/Python'
+    if len(sys.argv) == 1:
+        print("Необходимо передать параметр — url ресурса.")
+        return
 
-    # if len(sys.argv) == 1:
-    #     print("Необходимо передать параметр — url ресурса.")
-    #     return
-    #
-    # url_str = sys.argv[1]
+    url_str = sys.argv[1]
 
     try:
         response = requests.get(url_str)

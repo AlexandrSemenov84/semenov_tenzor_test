@@ -8,5 +8,5 @@ setup(
    author_email='semenov84@mail.ru',
    # packages=['mini_readability'],
    packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
-   install_requires=['requests', 'beautifulsoup4', 'DateTime']
+   install_requires=['requests', 'beautifulsoup4']
 )
