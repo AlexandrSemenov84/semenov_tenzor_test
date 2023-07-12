@@ -11,13 +11,13 @@ from string import Template
 
 
 def extract(url: str, document: Soup) -> str:
-    for extractor_class in BaseExtractor.__subclasses__():
+    for extractor_class in AbstractExtractor.__subclasses__():
         extractor = extractor_class()
         if extractor.check(url, document):
             return extractor.format(extractor.parse(document))
 
-    base_extractor = BaseExtractor()
-    return base_extractor.format(base_extractor.parse(document))
+    default_extractor = DefaultExtractor()
+    return default_extractor.format(default_extractor.parse(document))
 
 
 @dataclass
@@ -27,12 +27,26 @@ class Article:
     datetime: str = None
 
 
-class BaseExtractor:
-    @abstractmethod
-    def check(self, url: str, document: Soup) -> bool:
-        return True
+class AbstractExtractor(ABC):
 
     @abstractmethod
+    def check(self, url: str, document: Soup) -> bool:
+        pass
+
+    @abstractmethod
+    def parse(self, document: Soup) -> tuple[Article]:
+        pass
+
+    @abstractmethod
+    def format(self, articles: tuple[Article]) -> str:
+        pass
+
+
+class DefaultExtractor(AbstractExtractor):
+
+    def check(self, url: str, document: Soup) -> bool:
+        return False
+
     def parse(self, document: Soup) -> tuple[Article]:
         # убираем ненужное
         should_be_excluded = []
@@ -82,20 +96,20 @@ class BaseExtractor:
                 article = Article(tag.text)
                 continue
             if tag.name == 'pre':
-                paragraphs.append(f"```\n{self._wrap(tag.text)}\n```")
+                paragraphs.append(f"```\n{Utils.wrap(tag.text)}\n```")
                 continue
             if tag.name == 'ul':
                 items = tag.select('li')
-                items = map(lambda i: self._wrap("• " + self._process_links(i).text), items)
+                items = map(lambda i: Utils.wrap("• " + Utils.process_links(i).text), items)
                 paragraphs.append("\n".join(items))
                 continue
             if tag.name == 'ol':
                 items = tag.select('li')
-                items = [self._wrap(str(index) + '. ' + self._process_links(item).text) for index, item in
+                items = [Utils.wrap(str(index) + '. ' + Utils.process_links(item).text) for index, item in
                          enumerate(items, start=1)]
                 paragraphs.append("\n".join(items))
                 continue
-            paragraphs.append(self._wrap(self._process_links(tag).text))
+            paragraphs.append(Utils.wrap(Utils.process_links(tag).text))
 
         if article is not None and bool(paragraphs):
             article.content = "\n\n".join(paragraphs)
@@ -103,7 +117,6 @@ class BaseExtractor:
 
         return articles
 
-    @abstractmethod
     def format(self, articles: tuple[Article]) -> str:
         if not articles:
             return "К сожалению, ничего не нашлось."
@@ -123,24 +136,10 @@ class BaseExtractor:
             else:
                 raise ValueError("Неверный формат шаблона")
 
-        return "\n\n\n".join(map(lambda a: f"{self._wrap('  ' + a.title)}\n\n{a.content}", articles))
-
-    def _wrap(self, string):
-        return "\n".join(textwrap.wrap(string, 80))
-
-    def _process_links(self, element: Tag):
-        links = element.select('a', href=True)
-        for link in links:
-            if link.has_attr('href'):
-                href = link['href']
-                text = f"{link.text}[{unquote(href)}]" if not href.startswith('#') else link.text
-                link.replaceWith(text)
-            else:
-                link.replaceWith(link.text)
-        return element
+        return "\n\n\n".join(map(lambda a: f"{Utils.wrap('  ' + a.title)}\n\n{a.content}", articles))
 
 
-class LentaRuExtractor(BaseExtractor):
+class LentaRuExtractor(AbstractExtractor):
 
     def check(self, url: str, document: Soup):
         return "lenta.ru" in url
@@ -149,16 +148,16 @@ class LentaRuExtractor(BaseExtractor):
         title = document.findAll('span', class_='topic-body__title')
         date_time = document.findAll('a', class_='topic-header__time')
         content = document.findAll('div', class_='topic-body__content')
-        article = Article(self._wrap('  ' + title[0].text))
+        article = Article(Utils.wrap('  ' + title[0].text))
         article.datetime = '  ' + date_time[0].text
-        article.content = self._wrap(self._process_links(content[0]).text)
+        article.content = Utils.wrap(Utils.process_links(content[0]).text)
         return (article,)
 
     def format(self, articles: tuple[Article]) -> str:
         return "\n\n\n".join(map(lambda a: f"{a.datetime}\n{a.title}\n\n{a.content}", articles))
 
 
-class GoogleSearchExtractor(BaseExtractor):
+class GoogleSearchExtractor(AbstractExtractor):
 
     def check(self, url: str, document: Soup):
         return "google.com/search?q=" in url
@@ -169,14 +168,14 @@ class GoogleSearchExtractor(BaseExtractor):
         for link in links:
             title = link.find('h3').text
             href = link['href']
-            articles.append(Article(self._wrap(f"{title} [{href}]")))
+            articles.append(Article(Utils.wrap(f"{title} [{href}]")))
         return tuple(articles)
 
     def format(self, articles: tuple[Article]) -> str:
         return "\n\n\n".join(map(lambda a: f"{a.title}", articles))
 
 
-class RiaExtractor(BaseExtractor):
+class RiaExtractor(AbstractExtractor):
 
     def check(self, url: str, document: Soup):
         return "https://ria.ru/" in url
@@ -185,10 +184,29 @@ class RiaExtractor(BaseExtractor):
         title = document.findAll('div', class_='article__title')
         date_time = document.findAll('div', class_='article__info-date')
         content = document.findAll('div', class_='article__body')
-        article = Article(self._wrap('  ' + title[0].text))
+        article = Article(Utils.wrap('  ' + title[0].text))
         article.datetime = date_time[0].text
-        article.content = self._wrap(self._process_links(content[0]).text)
+        article.content = Utils.wrap(Utils.process_links(content[0]).text)
         return (article,)
 
     def format(self, articles: tuple[Article]) -> str:
         return "\n\n\n".join(map(lambda a: f"{a.datetime}\n{a.title}\n\n{a.content}", articles))
+
+
+class Utils:
+
+    @staticmethod
+    def wrap(text):
+        return "\n".join(textwrap.wrap(text, 80))
+
+    @staticmethod
+    def process_links(element: Tag):
+        links = element.select('a', href=True)
+        for link in links:
+            if link.has_attr('href'):
+                href = link['href']
+                text = f"{link.text}[{unquote(href)}]" if not href.startswith('#') else link.text
+                link.replaceWith(text)
+            else:
+                link.replaceWith(link.text)
+        return element
